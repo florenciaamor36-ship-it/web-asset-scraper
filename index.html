@@ -216,6 +216,7 @@
         </div>
     </footer>
 
+    <script src="./runtime-config.js"></script>
     <!-- JavaScript Logic -->
     <script>
         const API_BASE = window.WEBASSET_API_BASE || '';
@@ -251,6 +252,7 @@
                 const targetUrl = /^https?:\/\//i.test(rawInput) ? rawInput : 'https://' + rawInput;
                 const parsed = new URL(targetUrl);
                 if (!['http:', 'https:'].includes(parsed.protocol)) throw new Error('Solo se admiten enlaces HTTP o HTTPS.');
+                if (!API_BASE) throw new Error("La interfaz está publicada, pero falta configurar el servicio de captura.");
                 const response = await fetch(`${API_BASE}/api/captures`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
