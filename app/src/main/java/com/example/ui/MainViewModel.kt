@@ -13,6 +13,7 @@ import com.example.data.AppDatabase
 import com.example.data.ScrapedAsset
 import com.example.data.ScrapedSession
 import com.example.scraper.CaptureApi
+import com.example.scraper.LocalCapture
 import com.example.scraper.ScraperEngine
 import com.example.scraper.ZipExporter
 import kotlinx.coroutines.Dispatchers
@@ -96,6 +97,25 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 navigateTo(UiState.Dashboard(session.id))
             } catch (e: Exception) {
                 _scrapingError.value = "Extraction failed: ${e.localizedMessage}"
+            } finally {
+                _isScraping.value = false
+            }
+        }
+    }
+
+    fun startRuntimeCapture(pageUrl: String, pageTitle: String, observedUrls: List<String>) {
+        if (_isScraping.value) return
+        viewModelScope.launch {
+            _isScraping.value = true
+            _scrapingError.value = null
+            try {
+                val (session, assets) = LocalCapture.captureObservedResources(pageUrl, pageTitle, observedUrls)
+                dao.insertSession(session)
+                dao.deleteAssetsForSession(session.id)
+                dao.insertAssets(assets)
+                navigateTo(UiState.Dashboard(session.id))
+            } catch (e: Exception) {
+                _scrapingError.value = e.localizedMessage ?: "No se pudieron guardar los recursos observados."
             } finally {
                 _isScraping.value = false
             }

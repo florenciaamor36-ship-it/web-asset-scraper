@@ -189,6 +189,19 @@ fun HomeScreen(
             }
 
             item {
+                OutlinedButton(
+                    onClick = { viewModel.navigateTo(UiState.Browser(urlInput)) },
+                    enabled = !isScraping,
+                    shape = RoundedCornerShape(16.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(52.dp)
+                ) {
+                    Text("Probar captura dinámica", fontWeight = FontWeight.SemiBold)
+                }
+            }
+
+            item {
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
                     text = "Quick Presets",

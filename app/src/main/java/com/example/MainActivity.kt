@@ -48,7 +48,9 @@ class MainActivity : ComponentActivity() {
                     is UiState.Browser -> {
                         BrowserScreen(
                             viewModel = viewModel,
-                            initialUrl = state.url
+                            initialUrl = state.url,
+                            isScraping = isScraping,
+                            errorMessage = scrapingError
                         )
                     }
                 }

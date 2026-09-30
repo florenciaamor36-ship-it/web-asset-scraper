@@ -48,6 +48,40 @@ class LocalCaptureTest {
         }
     }
 
+    @Test
+    fun resourcesObservedDuringRuntimeCanBeExportedToZip() = runBlocking {
+        FixtureServer().use { fixture ->
+            val observed = listOf(
+                fixture.url("/page"),
+                fixture.url("/assets/cover.png"),
+                fixture.url("/assets/sample.mp3")
+            )
+            val (session, assets) = LocalCapture.captureObservedResources(
+                fixture.url("/page"),
+                "Runtime fixture",
+                observed
+            )
+
+            assertEquals("Runtime fixture", session.title)
+            assertEquals(setOf("cover.png", "sample.mp3"), assets.map { it.fileName }.toSet())
+            assertEquals(setOf("IMAGE", "AUDIO"), assets.map { it.category }.toSet())
+
+            val zipFile = LocalCapture.export(
+                ApplicationProvider.getApplicationContext(),
+                session,
+                assets
+            )
+            try {
+                ZipFile(zipFile).use { zip ->
+                    assertArrayEquals(FixtureServer.PNG, zip.getInputStream(zip.getEntry("cover.png")).use { it.readBytes() })
+                    assertArrayEquals(FixtureServer.MP3, zip.getInputStream(zip.getEntry("sample.mp3")).use { it.readBytes() })
+                }
+            } finally {
+                zipFile.delete()
+            }
+        }
+    }
+
     private class FixtureServer : Closeable {
         private val resources = mapOf(
             "/page" to Resource("text/html; charset=utf-8", """

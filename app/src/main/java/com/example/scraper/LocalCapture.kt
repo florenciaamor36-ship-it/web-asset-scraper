@@ -98,6 +98,65 @@ object LocalCapture {
         session to assets
     }
 
+    /**
+     * Builds a local capture from URLs observed while a page was running in WebView.
+     * Only ordinary public-looking HTTP(S) URLs with known downloadable extensions are retained;
+     * the app does not forward browser cookies or credentials when probing or exporting them.
+     */
+    suspend fun captureObservedResources(
+        rawPageUrl: String,
+        pageTitle: String,
+        observedUrls: List<String>
+    ): Pair<ScrapedSession, List<ScrapedAsset>> = withContext(Dispatchers.IO) {
+        val page = rawPageUrl.trim().toHttpUrlOrNull()
+            ?: throw IOException("La página actual no tiene una URL HTTP o HTTPS válida.")
+        if (page.scheme != "http" && page.scheme != "https") {
+            throw IOException("Solo se admiten páginas HTTP o HTTPS.")
+        }
+        val candidates = observedUrls.asSequence()
+            .mapNotNull { it.toHttpUrlOrNull() }
+            .filter { it.scheme == "http" || it.scheme == "https" }
+            .map { it.toString() }
+            .filter { isAsset(it) }
+            .distinct()
+            .take(MAX_ASSETS)
+            .map { Candidate(it) }
+            .toList()
+        if (candidates.isEmpty()) {
+            throw IOException("No vi archivos descargables todavía. Dejá que cargue el juego e interactuá para que solicite recursos; después probá de nuevo.")
+        }
+
+        val semaphore = Semaphore(6)
+        val sessionId = UUID.randomUUID().toString()
+        val assets = coroutineScope {
+            candidates.map { candidate ->
+                async(Dispatchers.IO) {
+                    semaphore.withPermit {
+                        val meta = getMeta(candidate)
+                        ScrapedAsset(
+                            id = UUID.randomUUID().toString(),
+                            sessionId = sessionId,
+                            url = candidate.url,
+                            fileName = fileName(candidate.url),
+                            category = category(candidate.url, meta.mime.ifBlank { candidate.hintedType }),
+                            mimeType = meta.mime.ifBlank { mime(candidate.url) },
+                            sizeBytes = meta.size
+                        )
+                    }
+                }
+            }.awaitAll()
+        }
+        val title = pageTitle.trim().ifBlank { page.host }
+        val session = ScrapedSession(
+            id = sessionId,
+            url = page.toString(),
+            title = title,
+            totalAssets = assets.size,
+            totalSizeMB = assets.sumOf { it.sizeBytes.coerceAtLeast(0) } / (1024.0 * 1024.0)
+        )
+        session to assets
+    }
+
     suspend fun readText(url: String): String = withContext(Dispatchers.IO) {
         val request = Request.Builder().url(url).header("User-Agent", UA).get().build()
         client.newCall(request).execute().use { response ->
