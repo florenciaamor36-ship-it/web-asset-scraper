@@ -60,8 +60,7 @@ object LocalCapture {
             if (!response.isSuccessful) throw IOException("No se pudo abrir la página (${response.code}).")
             finalUrl = response.request.url.toString()
             val body = response.body ?: throw IOException("La página llegó vacía.")
-            body.byteStream().use { readBounded(it, MAX_HTML_BYTES, "La página supera el límite de 2 MB.") }
-                .toString(Charsets.UTF_8.name())
+            String(body.byteStream().use { readBounded(it, MAX_HTML_BYTES, "La página supera el límite de 2 MB.") }, Charsets.UTF_8)
         }
         val doc = Jsoup.parse(html, finalUrl)
         val candidates = collectCandidates(doc, finalUrl)
@@ -104,8 +103,7 @@ object LocalCapture {
         client.newCall(request).execute().use { response ->
             if (!response.isSuccessful) throw IOException("No se pudo descargar el recurso (${response.code}).")
             val body = response.body ?: throw IOException("El recurso llegó vacío.")
-            body.byteStream().use { readBounded(it, MAX_TEXT_BYTES, "El archivo es demasiado grande para previsualizarlo.") }
-                .toString(Charsets.UTF_8.name())
+            String(body.byteStream().use { readBounded(it, MAX_TEXT_BYTES, "El archivo es demasiado grande para previsualizarlo.") }, Charsets.UTF_8)
         }
     }
 
@@ -207,7 +205,7 @@ object LocalCapture {
             if (ext(asset.url) in setOf("js", "json")) audioRefs(text).forEach { add(asset.url.toHttpUrlOrNull()?.resolve(it)?.toString()) }
             if (found.size >= MAX_ASSETS) break
         }
-        found.values.take(MAX_ASSETS)
+        return found.values.take(MAX_ASSETS)
     }
 
     private suspend fun getMeta(candidate: Candidate): Meta = withContext(Dispatchers.IO) {
