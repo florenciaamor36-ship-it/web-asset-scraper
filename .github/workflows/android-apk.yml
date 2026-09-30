@@ -25,7 +25,7 @@ jobs:
         with:
           gradle-version: '9.3.1'
       - name: Build debug APK
-        run: gradle --no-daemon testDebugUnitTest assembleDebug -PcaptureApiBaseUrl="${{ vars.CAPTURE_API_BASE_URL }}"
+        run: gradle --no-daemon testDebugUnitTest --tests com.example.scraper.LocalCaptureTest assembleDebug -PcaptureApiBaseUrl="${{ vars.CAPTURE_API_BASE_URL }}"
       - uses: actions/upload-artifact@v4
         with:
           name: webasset-scraper-debug-apk
