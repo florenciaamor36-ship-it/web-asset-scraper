@@ -22,6 +22,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/configure-pages@v5
+        with:
+          enablement: true
       - name: Prepare static web app
         env:
           CAPTURE_API_BASE_URL: ${{ vars.CAPTURE_API_BASE_URL }}
