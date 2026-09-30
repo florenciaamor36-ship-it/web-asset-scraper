@@ -55,3 +55,10 @@ PYTHONPATH=capture-service python -m unittest discover -s capture-service/tests 
 ## Seguridad y despliegue
 
 El servicio bloquea destinos no públicos, puertos personalizados y métodos HTTP con efectos de escritura, y aplica límites de tiempo, cantidad y tamaño. **Esta primera versión está pensada para desarrollo/autohospedaje, no para exponer una API abierta en Internet**: antes de un despliegue público hacen falta autenticación, cuotas/rate limiting y aislamiento de red de salida además de estas validaciones.
+
+## GitHub Actions y Pages
+
+- Cada cambio en  ejecuta el build del APK de depuración; el archivo queda como artefacto de Actions durante 14 días.
+- GitHub Pages publica la interfaz web estática. Pages no ejecuta el capturador Playwright.
+- Para conectar ambas versiones, configurá la variable de repositorio  con la URL HTTPS del servicio de captura. Si queda vacía, la interfaz lo informa y no intenta fingir una extracción.
+- El servicio no usa base de datos; las capturas se mantienen temporalmente en memoria. Aun así, necesita un host de contenedores para procesar páginas.
