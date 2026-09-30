@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html lang="es" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebAsset Scraper - Web App</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#6750A4',
+                        'primary-container': '#EADDFF',
+                        surface: '#FEF7FF',
+                        'surface-variant': '#E7E0EC'
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="h-full bg-slate-50 text-slate-900 font-sans antialiased flex flex-col">
+    <!-- Header -->
+    <header class="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-sm">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+            <div class="flex items-center space-x-3">
+                <div class="w-10 h-10 rounded-xl bg-purple-600 flex items-center justify-center text-white shadow-md">
+                    <i class="fa-solid fa-layer-group text-lg"></i>
+                </div>
+                <div>
+                    <h1 class="text-lg font-bold text-slate-900">WebAsset Scraper</h1>
+                    <p class="text-xs text-slate-500">Versión Web Oficial (Companion App)</p>
+                </div>
+            </div>
+            <div class="flex items-center space-x-3">
+                <button onclick="openInfoModal()" class="bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-2 rounded-xl text-sm font-semibold transition flex items-center space-x-1.5" title="Información y Legal">
+                    <i class="fa-solid fa-circle-info text-purple-600"></i>
+                    <span class="hidden sm:inline">Info & Legal</span>
+                </button>
+                <button id="downloadZipBtn" onclick="exportSelectedZip()" class="hidden bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-xl text-sm font-semibold shadow transition flex items-center space-x-2">
+                    <i class="fa-solid fa-file-zipper"></i>
+                    <span id="downloadBtnText">Descargar ZIP (0)</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Container -->
+    <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 flex flex-col space-y-6">
+        <!-- URL Input Section -->
+        <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-200">
+            <label class="block text-sm font-semibold text-slate-700 mb-2">URL de la Página Web a Extraer</label>
+            <div class="flex flex-col sm:flex-row gap-3">
+                <div class="relative flex-1">
+                    <span class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-400">
+                        <i class="fa-solid fa-globe"></i>
+                    </span>
+                    <input type="url" id="urlInput" placeholder="https://example.com o juego HTML5" class="w-full pl-11 pr-4 py-3 bg-slate-50 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-600 focus:bg-white text-sm transition">
+                </div>
+                <button onclick="startExtraction()" id="extractBtn" class="bg-purple-600 hover:bg-purple-700 text-white px-6 py-3 rounded-xl font-semibold text-sm shadow-md transition flex items-center justify-center space-x-2">
+                    <i class="fa-solid fa-wand-magic-sparkles"></i>
+                    <span>Extraer Activos</span>
+                </button>
+            </div>
+            <!-- Loading Indicator -->
+            <div id="loadingIndicator" class="hidden mt-4 flex items-center space-x-3 text-purple-600 font-medium text-sm">
+                <i class="fa-solid fa-circle-notch fa-spin text-lg"></i>
+                <span id="loadingText">Conectando y analizando recursos de la página web...</span>
+            </div>
+            <div id="errorMessage" class="hidden mt-4 p-3 bg-red-50 text-red-700 rounded-xl text-sm border border-red-200"></div>
+        </div>
+
+        <!-- Dashboard Section (Hidden initially) -->
+        <div id="dashboardSection" class="hidden flex flex-col space-y-6">
+            <p id="sessionStatus" class="text-xs text-slate-500"></p>
+            <!-- Stats Bar -->
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center space-x-4">
+                    <div class="w-12 h-12 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center text-xl">
+                        <i class="fa-solid fa-boxes-stacked"></i>
+                    </div>
+                    <div>
+                        <p class="text-xs text-slate-500 font-medium">Activos Detectados</p>
+                        <h3 id="statTotalAssets" class="text-xl font-bold text-slate-800">0</h3>
+                    </div>
+                </div>
+                <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center space-x-4">
+                    <div class="w-12 h-12 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center text-xl">
+                        <i class="fa-solid fa-square-check"></i>
+                    </div>
+                    <div>
+                        <p class="text-xs text-slate-500 font-medium">Seleccionados para ZIP</p>
+                        <h3 id="statSelectedAssets" class="text-xl font-bold text-slate-800">0</h3>
+                    </div>
+                </div>
+                <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center space-x-4">
+                    <div class="w-12 h-12 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center text-xl">
+                        <i class="fa-solid fa-hard-drive"></i>
+                    </div>
+                    <div>
+                        <p class="text-xs text-slate-500 font-medium">Tamaño real capturado</p>
+                        <h3 id="statTotalSize" class="text-xl font-bold text-slate-800">0.00 MB</h3>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Filters & Actions Bar -->
+            <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-col sm:flex-row gap-4 items-center justify-between">
+                <div class="relative w-full sm:w-80">
+                    <span class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                        <i class="fa-solid fa-magnifying-glass text-xs"></i>
+                    </span>
+                    <input type="text" id="searchInput" oninput="filterAssets()" placeholder="Filtrar por nombre o URL..." class="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-purple-600">
+                </div>
+                
+                <div class="flex items-center space-x-3 w-full sm:w-auto justify-end">
+                    <button onclick="selectAll(true)" class="text-xs font-semibold text-purple-600 hover:text-purple-800 px-3 py-2 bg-purple-50 rounded-lg transition">Marcar Todos</button>
+                    <button onclick="selectAll(false)" class="text-xs font-semibold text-slate-600 hover:text-slate-800 px-3 py-2 bg-slate-100 rounded-lg transition">Desmarcar Todos</button>
+                </div>
+            </div>
+
+            <!-- Category Tabs -->
+            <div class="flex space-x-2 overflow-x-auto pb-2">
+                <button onclick="setCategory('ALL')" class="cat-tab px-4 py-2 rounded-xl text-xs font-semibold bg-purple-600 text-white shadow-sm transition whitespace-nowrap" data-cat="ALL">TODOS</button>
+                <button onclick="setCategory('IMAGE')" class="cat-tab px-4 py-2 rounded-xl text-xs font-semibold bg-white text-slate-600 border border-slate-200 hover:bg-slate-50 transition whitespace-nowrap" data-cat="IMAGE">IMÁGENES</button>
+                <button onclick="setCategory('AUDIO')" class="cat-tab px-4 py-2 rounded-xl text-xs font-semibold bg-white text-slate-600 border border-slate-200 hover:bg-slate-50 transition whitespace-nowrap" data-cat="AUDIO">AUDIOS</button>
+                <button onclick="setCategory('VIDEO')" class="cat-tab px-4 py-2 rounded-xl text-xs font-semibold bg-white text-slate-600 border border-slate-200 hover:bg-slate-50 transition whitespace-nowrap" data-cat="VIDEO">VIDEOS</button>
+                <button onclick="setCategory('FONT')" class="cat-tab px-4 py-2 rounded-xl text-xs font-semibold bg-white text-slate-600 border border-slate-200 hover:bg-slate-50 transition whitespace-nowrap" data-cat="FONT">FUENTES</button>
+                <button onclick="setCategory('SCRIPT')" class="cat-tab px-4 py-2 rounded-xl text-xs font-semibold bg-white text-slate-600 border border-slate-200 hover:bg-slate-50 transition whitespace-nowrap" data-cat="SCRIPT">SCRIPTS JS</button>
+                <button onclick="setCategory('DATA')" class="cat-tab px-4 py-2 rounded-xl text-xs font-semibold bg-white text-slate-600 border border-slate-200 hover:bg-slate-50 transition whitespace-nowrap" data-cat="DATA">DATOS / CSS</button>
+            </div>
+
+            <!-- Assets List -->
+            <div id="assetsListContainer" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <!-- Dynamic cards injected via JS -->
+            </div>
+        </div>
+    </main>
+
+    <!-- Info & Legal Modal -->
+    <div id="infoModal" class="hidden fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl max-w-lg w-full max-h-[85vh] flex flex-col shadow-2xl overflow-hidden border border-slate-200">
+            <div class="px-6 py-4 border-b border-slate-200 flex items-center justify-between bg-purple-50">
+                <div class="flex items-center space-x-2 text-purple-800 font-bold text-sm">
+                    <i class="fa-solid fa-circle-info"></i>
+                    <span>Información, Créditos y Legal</span>
+                </div>
+                <button onclick="closeInfoModal()" class="text-slate-400 hover:text-slate-600 text-lg p-2"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="p-6 flex-1 overflow-auto space-y-5 text-sm text-slate-700">
+                <div>
+                    <h4 class="font-bold text-slate-900 mb-1 flex items-center"><i class="fa-solid fa-award text-purple-600 mr-2"></i> Créditos Oficiales</h4>
+                    <p class="text-xs text-slate-600 mb-2">Desarrollado en colaboración con:</p>
+                    <ul class="space-y-2 text-xs font-medium">
+                        <li class="bg-slate-50 p-2.5 rounded-xl border border-slate-200 flex items-center justify-between">
+                            <span class="font-bold text-slate-800"><i class="fa-solid fa-certificate text-purple-600 mr-1.5"></i> La Clave Argentina</span>
+                            <span class="text-purple-600 font-semibold">Partner Tecnológico</span>
+                        </li>
+                        <li class="bg-slate-50 p-2.5 rounded-xl border border-slate-200 flex items-center justify-between">
+                            <span class="font-bold text-slate-800"><i class="fa-solid fa-server text-emerald-600 mr-1.5"></i> Tienda SSH</span>
+                            <span class="text-emerald-600 font-semibold">Infraestructura & Redes</span>
+                        </li>
+                    </ul>
+                </div>
+
+                <hr class="border-slate-100">
+
+                <div>
+                    <h4 class="font-bold text-slate-900 mb-1 flex items-center"><i class="fa-solid fa-scale-balanced text-purple-600 mr-2"></i> Aviso Legal y Términos</h4>
+                    <p class="text-xs text-slate-600 leading-relaxed">
+                        WebAsset Scraper es una herramienta de utilidad técnica orientada a desarrolladores, diseñadores y educadores para la inspección y respaldo de recursos web públicos. El usuario es el único responsable de cumplir con las leyes de propiedad intelectual, derechos de autor y políticas de los sitios web consultados. Esta aplicación no almacena datos personales ni credenciales de navegación.
+                    </p>
+                </div>
+
+                <div class="bg-purple-50/50 p-3 rounded-xl border border-purple-100 text-[11px] text-purple-900">
+                    <p class="font-semibold mb-0.5">Versión del Sistema</p>
+                    <p>WebAsset Scraper v2.4 (Android & Web Unified Platform)</p>
+                </div>
+            </div>
+            <div class="px-6 py-4 bg-slate-50 border-t border-slate-200 flex justify-end">
+                <button onclick="closeInfoModal()" class="px-5 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-semibold transition">Entendido</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Code Viewer Modal -->
+    <div id="codeModal" class="hidden fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl max-w-2xl w-full max-h-[85vh] flex flex-col shadow-2xl overflow-hidden border border-slate-200">
+            <div class="px-6 py-4 border-b border-slate-200 flex items-center justify-between bg-slate-50">
+                <div>
+                    <h3 id="modalTitle" class="font-bold text-slate-800 text-sm">Inspector de Activo</h3>
+                    <p id="modalSubtitle" class="text-xs text-slate-500 truncate max-w-md"></p>
+                </div>
+                <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600 text-lg p-2"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="p-4 flex-1 overflow-auto bg-slate-900 text-slate-200 font-mono text-xs">
+                <pre id="modalContent" class="whitespace-pre-wrap">Cargando contenido...</pre>
+            </div>
+            <div class="px-6 py-4 bg-slate-50 border-t border-slate-200 flex justify-end space-x-3">
+                <button onclick="copyModalContent()" class="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-xl text-xs font-semibold transition"><i class="fa-solid fa-copy mr-1.5"></i> Copiar Código</button>
+                <button onclick="closeModal()" class="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-semibold transition">Cerrar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="bg-white border-t border-slate-200 py-4 mt-auto">
+        <div class="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between text-xs text-slate-500 gap-2">
+            <span>WebAsset Scraper &bull; Todos los derechos reservados</span>
+            <span>Créditos: <strong class="text-slate-700">La Clave Argentina</strong> &amp; <strong class="text-slate-700">Tienda SSH</strong></span>
+        </div>
+    </footer>
+
+    <!-- JavaScript Logic -->
+    <script>
+        const API_BASE = window.WEBASSET_API_BASE || '';
+        let currentSession = null;
+        let allAssets = [];
+        let selectedCategory = 'ALL';
+        let selectedIds = new Set();
+
+        function openInfoModal() {
+            document.getElementById('infoModal').classList.remove('hidden');
+        }
+
+        function closeInfoModal() {
+            document.getElementById('infoModal').classList.add('hidden');
+        }
+
+        async function startExtraction() {
+            const rawInput = document.getElementById('urlInput').value.trim();
+            const errorDiv = document.getElementById('errorMessage');
+            const loadingDiv = document.getElementById('loadingIndicator');
+            const dashboard = document.getElementById('dashboardSection');
+            if (!rawInput) {
+                errorDiv.innerText = "Por favor ingresa una URL válida.";
+                errorDiv.classList.remove('hidden');
+                return;
+            }
+
+            errorDiv.classList.add('hidden');
+            loadingDiv.classList.remove('hidden');
+            dashboard.classList.add('hidden');
+            document.getElementById('downloadZipBtn').classList.add('hidden');
+            try {
+                const targetUrl = /^https?:\/\//i.test(rawInput) ? rawInput : 'https://' + rawInput;
+                const parsed = new URL(targetUrl);
+                if (!['http:', 'https:'].includes(parsed.protocol)) throw new Error('Solo se admiten enlaces HTTP o HTTPS.');
+                const response = await fetch(`${API_BASE}/api/captures`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ url: parsed.href })
+                });
+                const data = await response.json();
+                if (!response.ok) throw new Error(data.detail || `Falló la captura (${response.status}).`);
+
+                currentSession = { id: data.captureId, title: data.title, url: data.url, warnings: data.warnings || [] };
+                allAssets = data.assets || [];
+                selectedIds = new Set(allAssets.filter(asset => asset.available).map(asset => asset.id));
+                selectedCategory = 'ALL';
+                document.getElementById('sessionStatus').innerText = `${data.title} · ${selectedIds.size} descargables`;
+                document.getElementById('statTotalAssets').innerText = allAssets.length;
+                document.getElementById('downloadZipBtn').classList.remove('hidden');
+                if (currentSession.warnings.length) {
+                    errorDiv.innerText = currentSession.warnings.join(' · ');
+                    errorDiv.classList.remove('hidden');
+                }
+                renderAssets();
+                dashboard.classList.remove('hidden');
+            } catch (err) {
+                errorDiv.innerText = "No se pudo capturar la página: " + (err.message || 'error inesperado');
+                errorDiv.classList.remove('hidden');
+            } finally {
+                loadingDiv.classList.add('hidden');
+            }
+        }
+
+        function escapeHtml(value) {
+            return String(value ?? '').replace(/[&<>"']/g, ch => ({
+                '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+            })[ch]);
+        }
+
+        function setCategory(cat) {
+            selectedCategory = cat;
+            document.querySelectorAll('.cat-tab').forEach(btn => {
+                if (btn.dataset.cat === cat) {
+                    btn.className = "cat-tab px-4 py-2 rounded-xl text-xs font-semibold bg-purple-600 text-white shadow-sm transition whitespace-nowrap";
+                } else {
+                    btn.className = "cat-tab px-4 py-2 rounded-xl text-xs font-semibold bg-white text-slate-600 border border-slate-200 hover:bg-slate-50 transition whitespace-nowrap";
+                }
+            });
+            renderAssets();
+        }
+
+        function filterAssets() {
+            renderAssets();
+        }
+
+        function renderAssets() {
+            const query = document.getElementById('searchInput').value.toLowerCase();
+            const container = document.getElementById('assetsListContainer');
+            container.innerHTML = '';
+
+            const filtered = allAssets.filter(asset => {
+                const matchesCat = selectedCategory === 'ALL' || asset.category === selectedCategory;
+                const matchesQuery = asset.fileName.toLowerCase().includes(query) || asset.url.toLowerCase().includes(query);
+                return matchesCat && matchesQuery;
+            });
+
+            if (filtered.length === 0) {
+                container.innerHTML = '<div class="col-span-full py-12 text-center text-slate-400 text-sm">No se encontraron activos con este filtro.</div>';
+                updateStats();
+                return;
+            }
+
+            filtered.forEach(asset => {
+                const isSelected = selectedIds.has(asset.id);
+                const card = document.createElement('div');
+                card.className = `bg-white p-4 rounded-2xl border ${isSelected ? 'border-purple-500 bg-purple-50/20' : 'border-slate-200'} shadow-sm flex items-center space-x-4 transition hover:shadow-md`;
+
+                let iconHtml = '';
+                if (asset.category === 'IMAGE') {
+                    iconHtml = `<img src="${escapeHtml(asset.url)}" class="w-12 h-12 rounded-xl object-cover bg-slate-100" onerror="this.src='https://placehold.co/48?text=IMG'">`;
+                } else {
+                    const iconColor = asset.category === 'AUDIO' ? 'text-emerald-600 bg-emerald-50' :
+                                      asset.category === 'VIDEO' ? 'text-blue-600 bg-blue-50' :
+                                      asset.category === 'SCRIPT' ? 'text-amber-600 bg-amber-50' : 'text-purple-600 bg-purple-50';
+                    const iconName = asset.category === 'AUDIO' ? 'fa-music' :
+                                     asset.category === 'VIDEO' ? 'fa-video' :
+                                     asset.category === 'SCRIPT' ? 'fa-code' : 'fa-file-lines';
+                    iconHtml = `<div class="w-12 h-12 rounded-xl ${iconColor} flex items-center justify-center text-lg"><i class="fa-solid ${iconName}"></i></div>`;
+                }
+
+                card.innerHTML = `
+                    <input type="checkbox" ${isSelected ? 'checked' : ''} ${asset.available ? '' : 'disabled'} onchange="toggleAsset('${escapeHtml(asset.id)}')" class="w-4 h-4 text-purple-600 rounded focus:ring-purple-500 cursor-pointer">
+                    ${iconHtml}
+                    <div class="flex-1 min-w-0">
+                        <h4 class="text-sm font-bold text-slate-800 truncate">${escapeHtml(asset.fileName)}</h4>
+                        <p class="text-xs text-slate-400 truncate">${escapeHtml(asset.url)}</p>
+                        <div class="flex items-center space-x-2 mt-1">
+                            <span class="text-[10px] font-bold px-2 py-0.5 bg-slate-100 text-slate-600 rounded">${escapeHtml(asset.category)}</span>
+                            <span class="text-[10px] text-slate-400">${asset.available ? `${(asset.sizeBytes / 1024).toFixed(1)} KB` : escapeHtml(asset.note || 'No descargable')}</span>
+                        </div>
+                    </div>
+                    <button onclick="inspectAsset('${escapeHtml(asset.id)}')" class="p-2 text-slate-400 hover:text-purple-600 transition"><i class="fa-solid fa-eye text-sm"></i></button>
+                `;
+                container.appendChild(card);
+            });
+
+            updateStats();
+        }
+
+        function toggleAsset(id) {
+            const asset = allAssets.find(item => item.id === id);
+            if (!asset || !asset.available) return;
+            if (selectedIds.has(id)) {
+                selectedIds.delete(id);
+            } else {
+                selectedIds.add(id);
+            }
+            renderAssets();
+        }
+
+        function selectAll(select) {
+            const query = document.getElementById('searchInput').value.toLowerCase();
+            const filtered = allAssets.filter(asset => {
+                const matchesCat = selectedCategory === 'ALL' || asset.category === selectedCategory;
+                const matchesQuery = asset.fileName.toLowerCase().includes(query) || asset.url.toLowerCase().includes(query);
+                return matchesCat && matchesQuery;
+            });
+
+            filtered.forEach(asset => {
+                if (select && asset.available) selectedIds.add(asset.id);
+                else selectedIds.delete(asset.id);
+            });
+            renderAssets();
+        }
+
+        function updateStats() {
+            document.getElementById('statSelectedAssets').innerText = selectedIds.size;
+            document.getElementById('downloadBtnText').innerText = `Descargar ZIP (${selectedIds.size})`;
+            
+            const selectedAssetsList = allAssets.filter(a => selectedIds.has(a.id));
+            const totalBytes = selectedAssetsList.filter(asset => asset.available).reduce((acc, curr) => acc + curr.sizeBytes, 0);
+            document.getElementById('statTotalSize').innerText = (totalBytes / (1024 * 1024)).toFixed(2) + ' MB';
+        }
+
+        async function inspectAsset(id) {
+            const asset = allAssets.find(item => item.id === id);
+            if (!asset) return;
+            document.getElementById('modalTitle').innerText = asset.fileName;
+            document.getElementById('modalSubtitle').innerText = asset.url;
+            const details = [
+                `Tipo: ${asset.mimeType || 'desconocido'}`,
+                `Categoría: ${asset.category}`,
+                `Tamaño recibido: ${Number(asset.sizeBytes || 0).toLocaleString()} bytes`,
+                `HTTP: ${asset.status || 'sin respuesta'}`,
+                asset.available ? 'Contenido real capturado y disponible para exportar.' : (asset.note || 'No se pudo guardar el contenido de esta respuesta.')
+            ];
+            document.getElementById('modalContent').innerText = details.join('\n');
+            document.getElementById('codeModal').classList.remove('hidden');
+        }
+
+        function closeModal() {
+            document.getElementById('codeModal').classList.add('hidden');
+        }
+
+        function copyModalContent() {
+            const text = document.getElementById('modalContent').innerText;
+            navigator.clipboard.writeText(text);
+            alert("¡Código copiado al portapapeles!");
+        }
+
+        async function exportSelectedZip() {
+            if (!currentSession?.id) {
+                alert('Primero capturá una página.');
+                return;
+            }
+            const assetIds = allAssets.filter(asset => selectedIds.has(asset.id) && asset.available).map(asset => asset.id);
+            if (!assetIds.length) {
+                alert('No hay recursos descargables seleccionados.');
+                return;
+            }
+            const button = document.getElementById('downloadZipBtn');
+            const buttonText = document.getElementById('downloadBtnText');
+            const oldText = buttonText.innerText;
+            button.disabled = true;
+            buttonText.innerText = 'Armando ZIP...';
+            try {
+                const response = await fetch(`${API_BASE}/api/exports`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ captureId: currentSession.id, assetIds })
+                });
+                if (!response.ok) {
+                    const error = await response.json().catch(() => ({}));
+                    throw new Error(error.detail || `Falló la exportación (${response.status}).`);
+                }
+                const blob = await response.blob();
+                const downloadUrl = URL.createObjectURL(blob);
+                const anchor = document.createElement('a');
+                anchor.href = downloadUrl;
+                anchor.download = `WebAssets_${(currentSession.title || 'Export').replace(/[^a-zA-Z0-9_-]/g, '_')}.zip`;
+                document.body.appendChild(anchor);
+                anchor.click();
+                anchor.remove();
+                URL.revokeObjectURL(downloadUrl);
+            } catch (err) {
+                alert('No se pudo crear el ZIP: ' + (err.message || 'error inesperado'));
+            } finally {
+                button.disabled = false;
+                buttonText.innerText = oldText;
+            }
+        }
+    </script>
+</body>
+</html>

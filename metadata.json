@@ -1,0 +1,7 @@
+{
+  "name": "WebAsset Scraper",
+  "description": "Extract, inspect and download web assets, media and network traffic like browser DevTools F12.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
+
