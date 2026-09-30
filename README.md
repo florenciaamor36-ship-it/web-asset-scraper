@@ -58,7 +58,7 @@ El servicio bloquea destinos no públicos, puertos personalizados y métodos HTT
 
 ## GitHub Actions y Pages
 
-- Cada cambio en  ejecuta el build del APK de depuración; el archivo queda como artefacto de Actions durante 14 días.
+- Cada cambio en main ejecuta el build del APK de depuración; el archivo queda como artefacto de Actions durante 14 días.
 - GitHub Pages publica la interfaz web estática. Pages no ejecuta el capturador Playwright.
-- Para conectar ambas versiones, configurá la variable de repositorio  con la URL HTTPS del servicio de captura. Si queda vacía, la interfaz lo informa y no intenta fingir una extracción.
+- Para conectar ambas versiones, configurá la variable de repositorio CAPTURE_API_BASE_URL con la URL HTTPS del servicio de captura. Si queda vacía, la interfaz lo informa y no intenta fingir una extracción.
 - El servicio no usa base de datos; las capturas se mantienen temporalmente en memoria. Aun así, necesita un host de contenedores para procesar páginas.
