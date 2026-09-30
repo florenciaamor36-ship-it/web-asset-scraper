@@ -26,18 +26,17 @@ object CaptureApi {
         .callTimeout(90, TimeUnit.SECONDS)
         .build()
 
-    private fun baseUrl(): String {
+    private fun baseUrl(): String? {
         val configured = BuildConfig.CAPTURE_API_BASE_URL.trim().trimEnd('/')
-        if (configured.isBlank()) {
-            throw IOException("El servicio de captura todavía no tiene una URL configurada.")
-        }
-        return configured
+        return configured.ifBlank { null }
     }
 
     suspend fun capture(rawUrl: String): Pair<ScrapedSession, List<ScrapedAsset>> = withContext(Dispatchers.IO) {
+        val serviceBase = baseUrl()
+        if (serviceBase == null) return@withContext LocalCapture.capture(rawUrl)
         val requestBody = JSONObject().put("url", rawUrl.trim()).toString().toRequestBody(jsonType)
         val request = Request.Builder()
-            .url("${baseUrl()}/api/captures")
+            .url("${serviceBase}/api/captures")
             .post(requestBody)
             .build()
 
@@ -74,8 +73,10 @@ object CaptureApi {
     }
 
     suspend fun readTextAsset(asset: ScrapedAsset): String = withContext(Dispatchers.IO) {
+        val serviceBase = baseUrl()
+        if (serviceBase == null) return@withContext LocalCapture.readText(asset.url)
         val request = Request.Builder()
-            .url("${baseUrl()}/api/captures/${asset.sessionId}/assets/${asset.id}/text")
+            .url("${serviceBase}/api/captures/${asset.sessionId}/assets/${asset.id}/text")
             .get()
             .build()
         client.newCall(request).execute().use { response ->
@@ -86,6 +87,8 @@ object CaptureApi {
     }
 
     suspend fun export(context: Context, session: ScrapedSession, assets: List<ScrapedAsset>): File = withContext(Dispatchers.IO) {
+        val serviceBase = baseUrl()
+        if (serviceBase == null) return@withContext LocalCapture.export(context, session, assets)
         if (assets.isEmpty()) throw IOException("No hay recursos seleccionados.")
         val payload = JSONObject()
             .put("captureId", session.id)
@@ -93,7 +96,7 @@ object CaptureApi {
             .toString()
             .toRequestBody(jsonType)
         val request = Request.Builder()
-            .url("${baseUrl()}/api/exports")
+            .url("${serviceBase}/api/exports")
             .post(payload)
             .build()
 
