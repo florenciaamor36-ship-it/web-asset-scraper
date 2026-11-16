@@ -1,36 +1,25 @@
-# Shared capture API (no separate paid host)
+# API propia de WebAsset Scraper
 
-The public demo capture runs as an ephemeral GitHub Actions job. Any authorized Zapia or client can call GitHub's REST API; the repo's GitHub credentials stay with that client and are never embedded in the app or sent to game pages. This is the free shared execution route; it is not an anonymous public endpoint.
+La app tiene una API HTTPS compartida: `https://web-asset-scraper-capture.onrender.com`. Ya está protegida con una clave privada configurada en el servidor. No necesitás comprar ni pedir una API externa. El servidor está en Render Free: no tiene costo mensual, pero puede dormirse o reiniciarse; las capturas interactivas guardadas en memoria se pierden con reinicios.
 
-## Authorization
+## Dar acceso a otra Zapia
 
-Use a fine-grained GitHub token scoped to this repository with **Actions: write** to start jobs and **Actions: read** to check runs/download artifacts. Keep the token in the caller's secure GitHub connector/credential store; never place it in Pages JavaScript, app source, URLs, chat, or a capture request. Each Zapia that calls the API needs its own authorized GitHub connection.
+Pasale la URL base y la clave privada por el almacén seguro de credenciales de esa Zapia, no en un mensaje público ni en código. La clave se envía como encabezado HTTPS `X-API-Key`. No la incluyas en parámetros de URL, Pages o el APK. Si una Zapia no puede guardar secretos de forma segura, no le compartas la clave.
 
-## Start a capture
+## Capturar recursos de una página pública
 
-`POST https://api.github.com/repos/florenciaamor36-ship-it/web-asset-scraper/actions/workflows/capture-public-game.yml/dispatches`
+`POST https://web-asset-scraper-capture.onrender.com/api/captures`
 
-Headers: `Accept: application/vnd.github+json`, `Authorization: Bearer <caller-held GitHub token>`, `X-GitHub-Api-Version: 2022-11-28`, `Content-Type: application/json`.
+Encabezados: `Content-Type: application/json` y `X-API-Key: <clave privada>`. Cuerpo: `{"url":"https://sitio-publico/"}`. La respuesta contiene `captureId`, inventario de recursos descargables y advertencias.
 
-Body:
+## Descargar ZIP
 
-```json
-{
-  "ref": "main",
-  "inputs": {
-    "request_id": "venus-20261116-a1",
-    "target_url": "https://demogamesfree.pragmaticplay.net/...",
-    "play_seconds": "300"
-  }
-}
-```
+`POST https://web-asset-scraper-capture.onrender.com/api/exports` con los mismos encabezados. Cuerpo: `{"captureId":"...","assetIds":["..."]}`. Responde un ZIP. Las capturas viven hasta 15 minutos y se borran antes si el servicio se reinicia.
 
-The workflow accepts public demo hosts explicitly allowlisted in `tools/capture_game.py`; the duration is limited to 1–600 seconds. The dispatch returns HTTP 204 when accepted. Give every request a unique `request_id` containing only letters, numbers, `_` or `-` (max 64 chars).
+## Sesión interactiva
 
-## Track and download
+La API también tiene rutas `/api/sessions` para abrir una demo, tomar capturas de pantalla, tocar controles y guardar respuestas de red. Cada llamada necesita el mismo encabezado `X-API-Key`. En el plan Free estas sesiones pueden perderse si Render reinicia Chromium; para capturas largas, el runner temporal gratuito de GitHub Actions es más confiable.
 
-1. List recent runs: `GET https://api.github.com/repos/florenciaamor36-ship-it/web-asset-scraper/actions/runs?per_page=20` and match `display_title` to `Capture <request_id>`. Poll until `status` is `completed`; inspect `conclusion`.
-2. List artifacts for the run: `GET https://api.github.com/repos/florenciaamor36-ship-it/web-asset-scraper/actions/runs/<run_id>/artifacts`. Match `webasset-capture-<request_id>`; its `archive_download_url` returns the ZIP.
-3. Check `manifest.json`, especially `playSeconds`, `capturedAssets`, `capturedBytes`, `errors` and each asset's `available`/HTTP status. A successful job does not mean every requested asset was served by the vendor.
+`GET /api/health` es público y solo confirma que el servicio responde; no requiere ni revela la clave.
 
-Artifacts are temporary (30 days). This mechanism has no always-on Render browser and does not need the user's phone. GitHub may enforce its public-repository Actions usage policies/limits; do not submit unrelated or unapproved targets. The capture is limited to public demo traffic and does not bypass authentication, DRM or partial-range protections.
+El servicio bloquea destinos privados y solo admite tráfico público; no inicia sesión ni evita DRM, autenticación o protecciones del proveedor. Revisá el manifiesto: que una petición termine bien no implica que todos los recursos estén disponibles.
