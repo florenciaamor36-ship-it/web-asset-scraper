@@ -171,8 +171,8 @@ async def start_interactive_session(payload: SessionStartRequest) -> dict:
         raise HTTPException(status_code=429, detail="There is already an interactive browser session")
     try:
         pw = await async_playwright().start()
-        browser = await pw.chromium.launch(headless=True, args=["--no-sandbox", "--disable-dev-shm-usage"])
-        context = await browser.new_context(ignore_https_errors=False, accept_downloads=False, viewport={"width": 1280, "height": 900})
+        browser = await pw.chromium.launch(headless=True, args=["--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu", "--disable-extensions", "--disable-background-networking", "--disable-breakpad", "--disable-features=Translate,BackForwardCache", "--renderer-process-limit=1", "--single-process", "--no-zygote", "--js-flags=--max-old-space-size=96"])
+        context = await browser.new_context(ignore_https_errors=False, accept_downloads=False, viewport={"width": 960, "height": 540}, device_scale_factor=1)
         async def safe_route(route):
             req = route.request
             if req.url.startswith(("data:", "blob:", "about:")):
@@ -240,7 +240,7 @@ def _live_session_or_404(session_id: str) -> dict:
 @app.get("/api/sessions/{session_id}/screenshot")
 async def session_screenshot(session_id: str):
     s=_live_session_or_404(session_id)
-    try: return Response(await s["page"].screenshot(type="jpeg",quality=75),media_type="image/jpeg")
+    try: return Response(await s["page"].screenshot(type="jpeg",quality=45,scale="css"),media_type="image/jpeg")
     except Exception as exc: raise HTTPException(status_code=502,detail=f"Screenshot failed: {type(exc).__name__}") from exc
 
 @app.post("/api/sessions/{session_id}/click")
