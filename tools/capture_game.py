@@ -102,7 +102,7 @@ async def main():
         while time.monotonic()<end:
             try:
                 dims=await game_page.evaluate('({w:innerWidth,h:innerHeight})')
-                await game_page.mouse.click(dims['w']*0.845,dims['h']*0.68);clicks+=1
+                await game_page.mouse.click(dims['w']*0.84,dims['h']*0.91);clicks+=1
                 await game_page.wait_for_timeout(6500)
             except Exception as e:
                 errors.append('play:'+type(e).__name__);await asyncio.sleep(2)
