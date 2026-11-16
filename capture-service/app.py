@@ -72,6 +72,8 @@ CAPTURE_SEMAPHORE = asyncio.Semaphore(MAX_CONCURRENT_CAPTURES)
 
 class CaptureRequest(BaseModel):
     url: str = Field(min_length=1, max_length=2048)
+    # Optional, explicit interaction for a publicly hosted demo's launch button.
+    activate_demo: bool = False
 
 
 class ExportRequest(BaseModel):
@@ -241,6 +243,23 @@ async def capture_page(payload: CaptureRequest) -> dict:
                         await page.wait_for_timeout(350)
                     await page.wait_for_timeout(500)
                     page_title = await page.title() or page_title
+
+                    # Demo launch buttons often defer the game iframe and its resource requests
+                    # until an explicit click. Keep this opt-in and narrowly allow the known
+                    # public BeTragaperras demo launcher; do not auto-click arbitrary pages.
+                    if payload.activate_demo:
+                        if urlsplit(target_url).hostname != "betragaperras.es":
+                            raise HTTPException(status_code=400, detail="Demo activation is only enabled for betragaperras.es")
+                        try:
+                            launch_button = page.get_by_role("button", name=re.compile(r"^\s*Juega Gratis\s*$", re.IGNORECASE))
+                            if await launch_button.count() and await launch_button.first.is_visible():
+                                await launch_button.first.click(timeout=5000)
+                                await page.wait_for_timeout(35000)
+                                page_title = await page.title() or page_title
+                            else:
+                                warnings.append("The expected ‘Juega Gratis’ launch button was not visible; demo was not activated")
+                        except PlaywrightError as exc:
+                            warnings.append(f"Could not activate the public demo button: {type(exc).__name__}")
                 finally:
                     if body_tasks:
                         try:
