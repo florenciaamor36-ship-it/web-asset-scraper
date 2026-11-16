@@ -96,13 +96,13 @@ async def main():
                     await b.click(timeout=1500);print('Clicked game button',label,flush=True);await game_page.wait_for_timeout(1500)
                     if label.lower()=='spin': break
             except Exception: pass
-        # Play demo for specified duration by pressing the typical lower-right spin control.
+        # Play demo for specified duration by pressing the visible Spin control near the lower-right center.
         # Click coordinates are sampled from viewport dimensions; this is simulation credit only.
         end=time.monotonic()+seconds; clicks=0
         while time.monotonic()<end:
             try:
                 dims=await game_page.evaluate('({w:innerWidth,h:innerHeight})')
-                await game_page.mouse.click(dims['w']*0.88,dims['h']*0.82);clicks+=1
+                await game_page.mouse.click(dims['w']*0.845,dims['h']*0.68);clicks+=1
                 await game_page.wait_for_timeout(6500)
             except Exception as e:
                 errors.append('play:'+type(e).__name__);await asyncio.sleep(2)
