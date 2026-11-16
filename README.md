@@ -66,3 +66,7 @@ El servicio bloquea destinos no públicos, puertos personalizados y métodos HTT
 ## API compartida para varias Zapias
 
 La API compartida gratuita se ejecuta con GitHub Actions y la API REST oficial de GitHub: cada instancia autorizada la llama con su propia conexión segura a GitHub; no se incrustan tokens en la app pública. Ver [API.md](API.md) para iniciar una captura, consultar el run y bajar el artefacto. No es una API anónima; cada cliente necesita permiso Actions en este repo.
+
+## API propia y conexión de otras Zapias
+
+El backend ofrece rutas HTTPS protegidas con una clave privada `X-API-Key` configurada en Render. Ver [API.md](API.md).
