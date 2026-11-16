@@ -23,6 +23,11 @@ async def main():
     if not target or urlsplit(target).scheme not in ('http','https') or not safe_host(target):
         raise SystemExit('URL outside approved public demo hosts')
     seconds=int(os.getenv('PLAY_SECONDS','300'))
+    if seconds < 1 or seconds > 600:
+        raise SystemExit('PLAY_SECONDS must be between 1 and 600')
+    request_id=os.getenv('REQUEST_ID','manual')
+    if not re.fullmatch(r'[A-Za-z0-9_-]{1,64}', request_id):
+        raise SystemExit('REQUEST_ID must contain only letters, numbers, _ or - (max 64)')
     async with async_playwright() as p:
         browser=await p.chromium.launch(headless=True,args=['--no-sandbox','--disable-dev-shm-usage','--disable-gpu'])
         context=await browser.new_context(viewport={'width':1280,'height':900},accept_downloads=False)
@@ -109,7 +114,7 @@ async def main():
         try: await game_page.screenshot(path=str(OUT/'after-play.jpg'),type='jpeg',quality=55)
         except Exception as e: errors.append('screenshot:'+type(e).__name__)
         await asyncio.sleep(3)
-        manifest={'sourceUrl':target,'finalUrl':game_page.url,'title':await game_page.title(),'playSeconds':seconds,'clicks':clicks,'capturedAssets':len(assets),'capturedBytes':total,'assets':list(assets.values()),'errors':errors}
+        manifest={'requestId':request_id,'sourceUrl':target,'finalUrl':game_page.url,'title':await game_page.title(),'playSeconds':seconds,'clicks':clicks,'capturedAssets':len(assets),'capturedBytes':total,'assets':list(assets.values()),'errors':errors}
         (OUT/'manifest.json').write_text(json.dumps(manifest,ensure_ascii=False,indent=2))
         with zipfile.ZipFile(OUT/'capture.zip','w',zipfile.ZIP_DEFLATED,compresslevel=3) as z:
             for f in OUT.iterdir():
