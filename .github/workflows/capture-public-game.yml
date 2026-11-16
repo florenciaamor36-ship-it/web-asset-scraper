@@ -38,4 +38,4 @@ jobs:
           name: hearts-venus-capture-${{ github.run_id }}
           path: capture-output/
           if-no-files-found: error
-          retention-days: 7
+          retention-days: 30
