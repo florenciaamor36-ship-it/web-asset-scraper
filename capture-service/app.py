@@ -141,7 +141,7 @@ def _session_or_404(capture_id: str) -> CaptureSession:
 @app.middleware("http")
 async def require_api_key(request: Request, call_next):
     # Keep health checks public; protect all API operations, including session endpoints.
-    if request.url.path.startswith("/api/") and request.url.path != "/api/health":
+    if request.method != "OPTIONS" and request.url.path.startswith("/api/") and request.url.path != "/api/health":
         if not API_KEY:
             return JSONResponse(status_code=503, content={"detail": "Capture API is not configured"})
         supplied = request.headers.get("x-api-key", "")
