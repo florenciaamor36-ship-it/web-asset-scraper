@@ -12,9 +12,9 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from urllib.parse import urlsplit
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, PlainTextResponse, Response
+from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse, Response
 from pydantic import BaseModel, Field
 from playwright.async_api import BrowserContext, Error as PlaywrightError, Response as PlaywrightResponse, async_playwright
 
@@ -26,6 +26,7 @@ MAX_ASSETS = int(os.getenv("MAX_ASSETS", "300"))
 MAX_ASSET_BYTES = int(os.getenv("MAX_ASSET_BYTES", str(16 * 1024 * 1024)))
 MAX_TOTAL_BYTES = int(os.getenv("MAX_TOTAL_BYTES", str(96 * 1024 * 1024)))
 CAPTURE_TIMEOUT_SECONDS = int(os.getenv("CAPTURE_TIMEOUT_SECONDS", "45"))
+API_KEY = os.getenv("API_KEY", "").strip()
 SESSION_TTL_SECONDS = int(os.getenv("SESSION_TTL_SECONDS", "900"))
 MAX_CONCURRENT_CAPTURES = int(os.getenv("MAX_CONCURRENT_CAPTURES", "2"))
 
@@ -87,7 +88,7 @@ if origins:
         allow_origins=origins,
         allow_credentials=False,
         allow_methods=["GET", "POST"],
-        allow_headers=["Content-Type"],
+        allow_headers=["Content-Type", "X-API-Key"],
     )
 
 
@@ -135,6 +136,18 @@ def _session_or_404(capture_id: str) -> CaptureSession:
     if not session:
         raise HTTPException(status_code=404, detail="Capture expired or not found; scan the page again")
     return session
+
+
+@app.middleware("http")
+async def require_api_key(request: Request, call_next):
+    # Keep health checks public; protect all API operations, including session endpoints.
+    if request.url.path.startswith("/api/") and request.url.path != "/api/health":
+        if not API_KEY:
+            return JSONResponse(status_code=503, content={"detail": "Capture API is not configured"})
+        supplied = request.headers.get("x-api-key", "")
+        if not secrets.compare_digest(supplied, API_KEY):
+            return JSONResponse(status_code=401, content={"detail": "Missing or invalid API key"}, headers={"WWW-Authenticate": "ApiKey"})
+    return await call_next(request)
 
 
 @app.get("/api/health")
