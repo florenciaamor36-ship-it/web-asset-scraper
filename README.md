@@ -62,3 +62,7 @@ El servicio bloquea destinos no públicos, puertos personalizados y métodos HTT
 - GitHub Pages publica la interfaz web estática. Pages no ejecuta el capturador Playwright.
 - Para conectar ambas versiones, configurá la variable de repositorio CAPTURE_API_BASE_URL con la URL HTTPS del servicio de captura. Si queda vacía, la interfaz lo informa y no intenta fingir una extracción.
 - El servicio no usa base de datos; las capturas se mantienen temporalmente en memoria. Aun así, necesita un host de contenedores para procesar páginas.
+
+## API compartida para varias Zapias
+
+La API compartida gratuita se ejecuta con GitHub Actions y la API REST oficial de GitHub: cada instancia autorizada la llama con su propia conexión segura a GitHub; no se incrustan tokens en la app pública. Ver [API.md](API.md) para iniciar una captura, consultar el run y bajar el artefacto. No es una API anónima; cada cliente necesita permiso Actions en este repo.
