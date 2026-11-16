@@ -177,6 +177,9 @@ async def start_interactive_session(payload: SessionStartRequest) -> dict:
             req = route.request
             if req.url.startswith(("data:", "blob:", "about:")):
                 await route.continue_(); return
+            host = urlsplit(req.url).hostname or ""
+            if host in {"www.google-analytics.com", "www.googletagmanager.com", "google-analytics.com", "stats.g.doubleclick.net", "www.clarity.ms", "client.riskified.com"}:
+                await route.abort(); return
             if req.method not in {"GET", "HEAD", "OPTIONS"}:
                 parts=urlsplit(req.url)
                 demo_post = (req.method == "POST" and parts.hostname == "demogamesfree.pragmaticplay.net" and parts.path.endswith("/gameService"))
@@ -367,7 +370,7 @@ async def capture_page(payload: CaptureRequest) -> dict:
     async with CAPTURE_SEMAPHORE:
         try:
             async with async_playwright() as playwright:
-                browser = await playwright.chromium.launch(headless=True, args=["--no-sandbox", "--disable-dev-shm-usage"])
+                browser = await playwright.chromium.launch(headless=True, args=["--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu", "--disable-extensions", "--disable-background-networking", "--disable-breakpad", "--disable-features=site-per-process,Translate,BackForwardCache", "--renderer-process-limit=1", "--js-flags=--max-old-space-size=128"])
                 context: BrowserContext = await browser.new_context(ignore_https_errors=False, accept_downloads=False)
                 await context.route("**/*", safe_route)
                 page = await context.new_page()
