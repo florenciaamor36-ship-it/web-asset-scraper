@@ -244,22 +244,31 @@ async def capture_page(payload: CaptureRequest) -> dict:
                     await page.wait_for_timeout(500)
                     page_title = await page.title() or page_title
 
-                    # Demo launch buttons often defer the game iframe and its resource requests
-                    # until an explicit click. Keep this opt-in and narrowly allow the known
-                    # public BeTragaperras demo launcher; do not auto-click arbitrary pages.
+                    # Demo launchers may put the actual public game in an iframe only
+                    # after a UI action. For the known BeTragaperras page, use the iframe_url
+                    # already present in its public page data; this avoids clicking through
+                    # an opaque overlay while still loading only the public demo URL.
                     if payload.activate_demo:
                         if urlsplit(target_url).hostname != "betragaperras.es":
                             raise HTTPException(status_code=400, detail="Demo activation is only enabled for betragaperras.es")
                         try:
-                            launch_button = page.get_by_role("button", name=re.compile(r"^\s*Juega Gratis\s*$", re.IGNORECASE))
-                            if await launch_button.count() and await launch_button.first.is_visible():
-                                await launch_button.first.click(timeout=5000)
+                            html = await page.content()
+                            iframe_match = re.search(r"iframe_url:\s*\"([^\"]+)\"", html)
+                            if not iframe_match:
+                                iframe_match = re.search(r"iframe_url\\?\s*:\\?\"([^\"]+)\"", html)
+                            if iframe_match:
+                                demo_url = iframe_match.group(1).replace(r"\u0026", "&").replace(r"\u003d", "=")
+                                await page.goto(demo_url, wait_until="domcontentloaded", timeout=CAPTURE_TIMEOUT_SECONDS * 1000)
+                                try:
+                                    await page.wait_for_load_state("networkidle", timeout=7000)
+                                except PlaywrightError:
+                                    warnings.append("The public demo kept network requests active during capture")
                                 await page.wait_for_timeout(35000)
                                 page_title = await page.title() or page_title
                             else:
-                                warnings.append("The expected ‘Juega Gratis’ launch button was not visible; demo was not activated")
+                                warnings.append("No public iframe_url was found on the BeTragaperras page")
                         except PlaywrightError as exc:
-                            warnings.append(f"Could not activate the public demo button: {type(exc).__name__}")
+                            warnings.append(f"Could not open the public demo iframe: {type(exc).__name__}")
                 finally:
                     if body_tasks:
                         try:
