@@ -224,6 +224,14 @@
         let allAssets = [];
         let selectedCategory = 'ALL';
         let selectedIds = new Set();
+        let apiKeyForThisTab = '';
+        function apiHeaders() {
+            if (!apiKeyForThisTab) {
+                apiKeyForThisTab = (window.prompt('Ingresá la clave privada de WebAsset Scraper (pedísela a la administradora):') || '').trim();
+                if (!apiKeyForThisTab) throw new Error('Hace falta la clave privada para usar la API.');
+            }
+            return { 'Content-Type': 'application/json', 'X-API-Key': apiKeyForThisTab };
+        }
 
         function openInfoModal() {
             document.getElementById('infoModal').classList.remove('hidden');
@@ -255,9 +263,10 @@
                 if (!API_BASE) throw new Error("La interfaz está publicada, pero falta configurar el servicio de captura.");
                 const response = await fetch(`${API_BASE}/api/captures`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: apiHeaders(),
                     body: JSON.stringify({ url: parsed.href })
                 });
+                if (response.status === 401) apiKeyForThisTab = '';
                 const data = await response.json();
                 if (!response.ok) throw new Error(data.detail || `Falló la captura (${response.status}).`);
 
@@ -437,9 +446,10 @@
             try {
                 const response = await fetch(`${API_BASE}/api/exports`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: apiHeaders(),
                     body: JSON.stringify({ captureId: currentSession.id, assetIds })
                 });
+                if (response.status === 401) apiKeyForThisTab = '';
                 if (!response.ok) {
                     const error = await response.json().catch(() => ({}));
                     throw new Error(error.detail || `Falló la exportación (${response.status}).`);
