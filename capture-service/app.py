@@ -147,6 +147,161 @@ async def api_info() -> dict:
     return {"name": "WebAsset Scraper API", "capture": "POST /api/captures", "export": "POST /api/exports"}
 
 
+# Interactive, API-driven browser sessions. These are in-memory and live only while
+# the single Render instance remains running; session ownership is restricted to
+# this app's configured origins by the existing API policy.
+LIVE_SESSIONS: dict[str, dict] = {}
+
+class SessionStartRequest(BaseModel):
+    url: str = Field(min_length=1, max_length=2048)
+
+class SessionClickRequest(BaseModel):
+    x: float = Field(ge=0, le=10000)
+    y: float = Field(ge=0, le=10000)
+    count: int = Field(default=1, ge=1, le=100)
+    interval_ms: int = Field(default=0, ge=0, le=60000)
+
+@app.post("/api/sessions")
+async def start_interactive_session(payload: SessionStartRequest) -> dict:
+    try:
+        target_url = await asyncio.to_thread(validate_target_url, payload.url)
+    except UnsafeTarget as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if len(LIVE_SESSIONS) >= 1:
+        raise HTTPException(status_code=429, detail="There is already an interactive browser session")
+    try:
+        pw = await async_playwright().start()
+        browser = await pw.chromium.launch(headless=True, args=["--no-sandbox", "--disable-dev-shm-usage"])
+        context = await browser.new_context(ignore_https_errors=False, accept_downloads=False, viewport={"width": 1280, "height": 900})
+        async def safe_route(route):
+            req = route.request
+            if req.url.startswith(("data:", "blob:", "about:")):
+                await route.continue_(); return
+            if req.method not in {"GET", "HEAD", "OPTIONS"}:
+                parts=urlsplit(req.url)
+                demo_post = (req.method == "POST" and parts.hostname == "demogamesfree.pragmaticplay.net" and parts.path.endswith("/gameService"))
+                if not demo_post:
+                    await route.abort(); return
+            try: await asyncio.to_thread(validate_request_url, req.url)
+            except UnsafeTarget:
+                await route.abort(); return
+            await route.continue_()
+        await context.route("**/*", safe_route)
+        page = await context.new_page()
+        assets: dict[str, CapturedAsset] = {}
+        total = {"bytes": 0}
+        tasks: set[asyncio.Task] = set()
+        async def save_response(response):
+            u = response.url
+            if not u.startswith(("http://", "https://")) or u in assets or len(assets) >= MAX_ASSETS: return
+            try:
+                headers = await response.all_headers(); mime = headers.get("content-type", "application/octet-stream"); status=response.status
+                n=int(headers.get("content-length", "0") or "0")
+                if status == 206:
+                    a=CapturedAsset(secrets.token_hex(8),u,_safe_filename(u,mime,len(assets)+1),_category(mime,u),mime,n,status,note="Partial byte-range response; not reconstructed")
+                elif status < 200 or status >= 300:
+                    a=CapturedAsset(secrets.token_hex(8),u,_safe_filename(u,mime,len(assets)+1),_category(mime,u),mime,0,status,note="HTTP response was not successful")
+                elif n > MAX_ASSET_BYTES:
+                    a=CapturedAsset(secrets.token_hex(8),u,_safe_filename(u,mime,len(assets)+1),_category(mime,u),mime,n,status,note="Skipped: per-file size limit")
+                else:
+                    body=await response.body()
+                    if len(body)>MAX_ASSET_BYTES or total["bytes"]+len(body)>MAX_TOTAL_BYTES:
+                        a=CapturedAsset(secrets.token_hex(8),u,_safe_filename(u,mime,len(assets)+1),_category(mime,u),mime,len(body),status,note="Skipped: capture size limit")
+                    else:
+                        total["bytes"]+=len(body);a=CapturedAsset(secrets.token_hex(8),u,_safe_filename(u,mime,len(assets)+1),_category(mime,u),mime,len(body),status,content=body)
+                assets[u]=a
+            except (PlaywrightError, asyncio.TimeoutError, ValueError):
+                return
+        def on_response(response):
+            t=asyncio.create_task(save_response(response));tasks.add(t);t.add_done_callback(tasks.discard)
+        page.on("response",on_response)
+        await context.route("**/*", safe_route)
+        await page.goto(target_url,wait_until="domcontentloaded",timeout=CAPTURE_TIMEOUT_SECONDS*1000)
+        await page.wait_for_timeout(5000)
+        sid=secrets.token_urlsafe(18)
+        LIVE_SESSIONS[sid]={"pw":pw,"browser":browser,"context":context,"page":page,"assets":assets,"tasks":tasks,"total":total,"url":target_url,"started":time.time()}
+        return {"sessionId":sid,"url":target_url,"title":await page.title(),"instructions":"Use /screenshot, /click, /play and /capture via this API. The browser stays open until capture/close."}
+    except HTTPException: raise
+    except Exception as exc:
+        try: await browser.close()
+        except Exception: pass
+        try: await pw.stop()
+        except Exception: pass
+        raise HTTPException(status_code=502,detail=f"Could not start interactive session: {type(exc).__name__}") from exc
+
+def _live_session_or_404(session_id: str) -> dict:
+    s=LIVE_SESSIONS.get(session_id)
+    if not s: raise HTTPException(status_code=404,detail="Interactive session not found or expired")
+    return s
+
+@app.get("/api/sessions/{session_id}/screenshot")
+async def session_screenshot(session_id: str):
+    s=_live_session_or_404(session_id)
+    try: return Response(await s["page"].screenshot(type="jpeg",quality=75),media_type="image/jpeg")
+    except Exception as exc: raise HTTPException(status_code=502,detail=f"Screenshot failed: {type(exc).__name__}") from exc
+
+@app.post("/api/sessions/{session_id}/click")
+async def session_click(session_id: str,payload: SessionClickRequest) -> dict:
+    s=_live_session_or_404(session_id); p=s["page"]
+    try:
+        for i in range(payload.count):
+            await p.mouse.click(payload.x,payload.y)
+            if payload.interval_ms and i+1<payload.count: await p.wait_for_timeout(payload.interval_ms)
+        return {"ok":True,"clicks":payload.count,"title":await p.title()}
+    except Exception as exc: raise HTTPException(status_code=502,detail=f"Click failed: {type(exc).__name__}") from exc
+
+class SessionPlayRequest(BaseModel):
+    seconds: int = Field(default=300,ge=1,le=300)
+    x: float = Field(ge=0,le=10000)
+    y: float = Field(ge=0,le=10000)
+    interval_seconds: int = Field(default=8,ge=2,le=60)
+
+@app.post("/api/sessions/{session_id}/play")
+async def session_play(session_id: str,payload: SessionPlayRequest) -> dict:
+    s=_live_session_or_404(session_id);p=s["page"];end=time.monotonic()+payload.seconds;clicks=0
+    try:
+        while time.monotonic()<end:
+            await p.mouse.click(payload.x,payload.y);clicks+=1
+            remaining=end-time.monotonic()
+            if remaining>0: await p.wait_for_timeout(int(min(payload.interval_seconds,remaining)*1000))
+        pending=list(s["tasks"])
+        if pending: await asyncio.wait(pending,timeout=8)
+        return {"ok":True,"seconds":payload.seconds,"clicks":clicks,"capturedResponses":len(s["assets"]),"capturedBytes":s["total"]["bytes"]}
+    except Exception as exc: raise HTTPException(status_code=502,detail=f"Play session failed: {type(exc).__name__}") from exc
+
+@app.post("/api/sessions/{session_id}/capture")
+async def finish_interactive_session(session_id: str) -> dict:
+    s=_live_session_or_404(session_id)
+    try:
+        pending=list(s["tasks"])
+        if pending: await asyncio.wait(pending,timeout=10)
+        assets=sorted(s["assets"].values(),key=lambda a:(a.category,a.file_name.lower(),a.url))
+        title=await s["page"].title() or (urlsplit(s["url"]).hostname or "Web Page")
+        session_id2=secrets.token_urlsafe(18)
+        SESSIONS[session_id2]=CaptureSession(session_id2,s["url"],title[:200],time.time(),assets,[])
+        result={"captureId":session_id2,"title":title,"totalAssets":len(assets),"totalSizeBytes":sum(a.size_bytes for a in assets if a.content is not None),"assets":[a.public() for a in assets],"warnings":[]}
+        return result
+    finally:
+        LIVE_SESSIONS.pop(session_id,None)
+        try: await s["context"].close()
+        except Exception: pass
+        try: await s["browser"].close()
+        except Exception: pass
+        try: await s["pw"].stop()
+        except Exception: pass
+
+@app.delete("/api/sessions/{session_id}")
+async def close_interactive_session(session_id: str) -> dict:
+    s=LIVE_SESSIONS.pop(session_id,None)
+    if not s: return {"ok":True}
+    for key in ("context","browser"):
+        try: await s[key].close()
+        except Exception: pass
+    try: await s["pw"].stop()
+    except Exception: pass
+    return {"ok":True}
+
+
 @app.post("/api/captures")
 async def capture_page(payload: CaptureRequest) -> dict:
     try:
