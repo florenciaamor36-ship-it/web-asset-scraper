@@ -1,0 +1,28 @@
+name: Audit Hearts of Venus user interface
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  audit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install Chromium
+        run: |
+          pip install playwright==1.56.0
+          python -m playwright install --with-deps chromium
+      - name: Audit mobile portrait, mobile landscape and desktop
+        run: python tools/audit_hearts_venus.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: hearts-venus-ui-audit
+          path: ui-audit-output/
+          if-no-files-found: warn
+          retention-days: 7
