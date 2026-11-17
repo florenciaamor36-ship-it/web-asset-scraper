@@ -24,7 +24,7 @@ async def view(browser,w,h,label):
   except Exception as e:d['spins'].append({'spin':i+1,'ok':False,'error':str(e)})
  d['afterSpins']=await snap(page,label+'-after-spins')
  try:
-  await page.locator('#autoSpin').click(force=True);await page.wait_for_timeout(120);d['autoOn']=await page.locator('#autoSpin').get_attribute('aria-pressed');await page.locator('#autoStopOverlay').click(force=True);await page.wait_for_timeout(150);d['autoOff']=await page.locator('#autoSpin').get_attribute('aria-pressed')
+  await page.locator('#autoSpin').click(force=True);await page.wait_for_timeout(120);d['autoOn']=await page.locator('#autoSpin').get_attribute('aria-pressed');await page.locator('#autoSpin').click(force=True);await page.wait_for_timeout(150);d['autoOff']=await page.locator('#autoSpin').get_attribute('aria-pressed')
  except Exception as e:d['autoError']=str(e)
  d['errors']=errs;await page.close();return d
 async def main():
