@@ -23,6 +23,7 @@ async def view(browser,w,h,label):
    if i: await page.wait_for_timeout(2400)
    await page.locator('#spin').click(force=True,timeout=3000);await page.wait_for_function(f"window.__auditEvents.filter(e=>e.type==='spin-result').length>={i+1}",timeout=18000);d['spins'].append({'spin':i+1,'ok':True,'events':await page.evaluate("window.__auditEvents.map(e=>e.type)"),'values':await page.evaluate("({balance:document.querySelector('#balance').innerText,bet:document.querySelector('#bet').innerText,lines:document.querySelector('#lines').innerText,win:document.querySelector('#win').innerText})")});await page.wait_for_timeout(450)
   except Exception as e:d['spins'].append({'spin':i+1,'ok':False,'error':str(e)})
+ d['audio']=await page.evaluate("window.__VENUS_AUDIO_TEST||null")
  d['afterSpins']=await snap(page,label+'-after-spins')
  try:
   await page.locator('#autoSpin').click(force=True);await page.wait_for_timeout(120);d['autoOn']=await page.locator('#autoSpin').get_attribute('aria-pressed');await page.locator('#autoSpin').click(force=True);await page.wait_for_timeout(150);d['autoOff']=await page.locator('#autoSpin').get_attribute('aria-pressed')
@@ -30,7 +31,7 @@ async def view(browser,w,h,label):
  d['errors']=errs;await page.close();return d
 async def main():
  async with async_playwright() as p:
-  b=await p.chromium.launch(headless=True,args=['--no-sandbox','--disable-dev-shm-usage']);rep={'url':URL,'viewports':[]}
+  b=await p.chromium.launch(headless=True,args=['--no-sandbox','--disable-dev-shm-usage','--autoplay-policy=no-user-gesture-required']);rep={'url':URL,'viewports':[]}
   for w,h,l in [(430,932,'portrait'),(932,430,'landscape'),(1365,900,'desktop')]:
    try:rep['viewports'].append(await view(b,w,h,l))
    except Exception as e:rep['viewports'].append({'label':l,'fatal':str(e)})
@@ -45,10 +46,15 @@ async def main():
   for s in v.get('spins',[]):
    if not s['ok']:issues.append(f"{v['label']} spin failed {s}")
   if v.get('errors'):issues.append(f"{v['label']} browser errors {v['errors']}")
+  if v['label'] in ('portrait','desktop'):
+   a=v.get('audio') or {}
+   if not a.get('ready'):issues.append(f"{v['label']} audio JSON did not load")
+   if a.get('soundId')!='0864ff107a030e5489388b8012f6af94':issues.append(f"{v['label']} audio ID mismatch {a.get('soundId')}")
+   if not any(x.get('playing') or x.get('playPromise')=='resolved' for x in a.get('plays',[])):issues.append(f"{v['label']} source GUI audio did not start {a}")
   if v.get('autoOff')!='false':issues.append(f"{v['label']} auto-stop issue {v.get('autoOff')}")
  (OUT/'issues.txt').write_text('\n'.join(issues) if issues else 'No flagged issues.')
  print('FLAGGED',len(issues));print('\n'.join(issues));
  for v in rep['viewports']:
   if v.get('fatal'):print('FATAL',v['label'],v['fatal']);continue
-  print('VIEW',v['label'],v['status'],'overlaps',v['initial']['overlaps'],'actions',v['actions'],'paytable',v.get('paytableClosed'),'spins',[(s.get('ok'),s.get('values')) for s in v['spins']],'auto',v.get('autoOn'),v.get('autoOff'),'errors',v.get('errors'))
+  print('VIEW',v['label'],v['status'],'overlaps',v['initial']['overlaps'],'actions',v['actions'],'paytable',v.get('paytableClosed'),'spins',[(s.get('ok'),s.get('values')) for s in v['spins']],'auto',v.get('autoOn'),v.get('autoOff'),'audio',v.get('audio'),'errors',v.get('errors'))
 asyncio.run(main())
