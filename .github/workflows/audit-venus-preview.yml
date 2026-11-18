@@ -1,0 +1,28 @@
+name: Audit Hearts of Venus previews
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  audit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install Playwright Chromium
+        run: |
+          pip install playwright==1.56.0
+          python -m playwright install --with-deps chromium
+      - name: Run visual and interaction audit
+        run: python tools/audit_venus_preview.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: hearts-of-venus-browser-audit-${{ github.run_id }}
+          path: venus-audit/
+          if-no-files-found: warn
+          retention-days: 30
